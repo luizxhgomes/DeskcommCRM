@@ -10,7 +10,7 @@ import { generateRecoveryCodes, hashRecoveryCode } from "@/lib/auth/recovery-cod
 const ENROLLMENT_COOKIE = "mfa_enrollment";
 const RECOVERY_CODES_COOKIE = "mfa_recovery_codes";
 
-type EnrollmentState = { factorId: string; uri: string; secret: string };
+type EnrollmentState = { factorId: string; uri: string; secret: string; returnTo?: string };
 
 function decode(raw: string | undefined): EnrollmentState | null {
   if (!raw) return null;
@@ -45,6 +45,8 @@ export async function POST(request: Request) {
   const enrollment = decode(
     requestCookies(request).find(({ name }) => name === ENROLLMENT_COOKIE)?.value,
   );
+  const formData = await request.formData();
+  const returnTo = enrollment?.returnTo?.startsWith("/app/") ? enrollment.returnTo : "/app/settings/security";
   const target = new URL("/app/nucleo/mfa-enroll", request.url);
   const response = NextResponse.redirect(target, 303);
   const supabase = createServerClient(
@@ -79,7 +81,7 @@ export async function POST(request: Request) {
   if (!user) return NextResponse.redirect(new URL("/login?next=/app/nucleo", request.url), 303);
   if (!enrollment) return redirectWith("expirado");
 
-  const code = String((await request.formData()).get("code") ?? "").trim();
+  const code = String(formData.get("code") ?? "").trim();
   if (!/^\d{6}$/.test(code)) return redirectWith("codigo");
 
   const { data: challenge, error: challengeError } = await supabase.auth.mfa.challenge({
@@ -116,6 +118,15 @@ export async function POST(request: Request) {
   response.cookies.set({
     name: RECOVERY_CODES_COOKIE,
     value: encode(recoveryCodes),
+    httpOnly: true,
+    sameSite: "strict",
+    secure: cookieSecure(),
+    path: "/",
+    maxAge: 10 * 60,
+  });
+  response.cookies.set({
+    name: "mfa_return_to",
+    value: returnTo,
     httpOnly: true,
     sameSite: "strict",
     secure: cookieSecure(),

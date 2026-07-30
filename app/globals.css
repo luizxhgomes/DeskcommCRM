@@ -9,6 +9,18 @@
    ───────────────────────────────────────────────────────────────────────── */
 
 :root {
+  /* Fontes locais: o painel pode iniciar sem depender de Google Fonts. */
+  --font-atkinson: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
+  --font-bricolage: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-jakarta: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-fraunces: Georgia, "Times New Roman", serif;
+  --font-manrope: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-source-serif: Georgia, "Times New Roman", serif;
+  --font-plex-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-plex-mono: ui-monospace, "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
+  --font-jetbrains: ui-monospace, "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
+
   /* Surfaces (light) */
   --color-bg: #faf9f6;
   --color-surface: #ffffff;

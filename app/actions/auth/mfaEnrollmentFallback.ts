@@ -17,7 +17,7 @@ const COOKIE_OPTIONS = {
   maxAge: 10 * 60,
 };
 
-type EnrollmentState = { factorId: string; uri: string; secret: string };
+type EnrollmentState = { factorId: string; uri: string; secret: string; returnTo?: string };
 
 function encode(value: unknown): string {
   return Buffer.from(JSON.stringify(value), "utf8").toString("base64url");

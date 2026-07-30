@@ -1,25 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import { Atkinson_Hyperlegible, IBM_Plex_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import { branding } from "@/lib/branding";
 import { ThemeProvider } from "@/lib/theme";
 import { Providers } from "./providers";
 import { PublicEnvScript } from "./public-env-script";
 import "./globals.css";
-
-const atkinson = Atkinson_Hyperlegible({
-  subsets: ["latin", "latin-ext"],
-  weight: ["400", "700"],
-  display: "swap",
-  variable: "--font-atkinson",
-});
-
-const plexMono = IBM_Plex_Mono({
-  subsets: ["latin", "latin-ext"],
-  weight: ["400", "500"],
-  display: "swap",
-  variable: "--font-mono",
-});
 
 /**
  * Metadata dinâmica (não `export const metadata`) para a marca ser lida em RUNTIME.
@@ -71,7 +56,6 @@ export default function RootLayout({
       lang="pt-BR"
       data-theme="light"
       suppressHydrationWarning
-      className={`${atkinson.variable} ${plexMono.variable}`}
     >
       <head>
         {/* Config pública do Supabase em runtime (imagem genérica self-host). */}

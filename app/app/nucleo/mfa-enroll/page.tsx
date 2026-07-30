@@ -88,6 +88,7 @@ export default async function MfaEnrollmentPage({
           </p>
         )}
         <form method="post" action="/api/auth/mfa/confirm" className="space-y-3">
+          <input type="hidden" name="return_to" value={state.enrollment.returnTo ?? "/app/settings/security"} />
           <label htmlFor="code" className="text-sm font-medium">
             Código de 6 dígitos
           </label>

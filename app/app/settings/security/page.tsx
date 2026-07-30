@@ -1,5 +1,6 @@
 import { requireAuth, isMfaEnrolled } from "@/lib/auth/server";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { SecurityClient } from "./_client";
 
 export const dynamic = "force-dynamic";
@@ -25,9 +26,10 @@ export default async function SecurityPage() {
           )}
         </p>
         {!enrolled && (
-          <p className="text-xs text-muted-foreground">
-            Faça login novamente para iniciar o enrolamento.
-          </p>
+          <form method="post" action="/api/auth/mfa/enroll">
+            <input type="hidden" name="return_to" value="/app/settings/security" />
+            <Button type="submit" variant="outline">Ativar verificação em duas etapas</Button>
+          </form>
         )}
       </Card>
 

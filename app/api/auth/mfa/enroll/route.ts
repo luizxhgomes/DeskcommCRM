@@ -10,6 +10,13 @@ function encode(value: unknown): string {
   return Buffer.from(JSON.stringify(value), "utf8").toString("base64url");
 }
 
+function resolveReturnTo(value: FormDataEntryValue | null): string {
+  const candidate = typeof value === "string" ? value : "";
+  return candidate.startsWith("/app/") && !candidate.startsWith("//")
+    ? candidate
+    : "/app/settings/security";
+}
+
 /**
  * Native form endpoint for MFA enrollment.
  *
@@ -17,6 +24,8 @@ function encode(value: unknown): string {
  * always start the mandatory MFA flow from a normal browser form submission.
  */
 export async function POST(request: Request) {
+  const formData = await request.formData();
+  const returnTo = resolveReturnTo(formData.get("return_to"));
   const url = new URL("/app/nucleo/mfa-enroll", request.url);
   const response = NextResponse.redirect(url, 303);
   const cookies = request.headers.get("cookie") ?? "";
@@ -52,7 +61,9 @@ export async function POST(request: Request) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return NextResponse.redirect(new URL("/login?next=/app/nucleo", request.url), 303);
+  if (!user) {
+    return NextResponse.redirect(new URL(`/login?next=${encodeURIComponent(returnTo)}`, request.url), 303);
+  }
 
   const { data: existing } = await supabase.auth.mfa.listFactors();
   for (const factor of existing?.all ?? []) {
@@ -72,7 +83,7 @@ export async function POST(request: Request) {
 
   response.cookies.set({
     name: ENROLLMENT_COOKIE,
-    value: encode({ factorId: data.id, uri: data.totp.uri, secret: data.totp.secret }),
+    value: encode({ factorId: data.id, uri: data.totp.uri, secret: data.totp.secret, returnTo }),
     httpOnly: true,
     sameSite: "strict",
     secure: cookieSecure(),
