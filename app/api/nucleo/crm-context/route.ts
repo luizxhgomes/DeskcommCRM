@@ -18,7 +18,11 @@ export async function GET(): Promise<Response> {
       .select("id, name, slug, crm_stages(id, name, position)")
       .eq("organization_id", authz.org.orgId)
       .eq("is_archived", false)
-      .order("created_at"),
+      .order("created_at")
+      // Sem esta ordenação as etapas chegam em ordem arbitrária e o seletor
+      // deixa de refletir o funil — inclusive expondo etapas terminais antes
+      // das iniciais.
+      .order("position", { referencedTable: "crm_stages" }),
     supabase
       .from("crm_leads")
       .select("id, title, pipeline_id, stage_id, status")

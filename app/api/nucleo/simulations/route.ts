@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomInt, randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 
@@ -47,7 +47,9 @@ export async function POST(request: NextRequest): Promise<Response> {
     .maybeSingle();
   if (!session) return fail("nucleo_session_missing", "A sessão local do Núcleo ainda não foi criada pelo seed.", 409, { requestId });
 
-  const simulationPhone = `+550000${randomUUID().replaceAll("-", "").slice(0, 8)}`;
+  // Somente dígitos: contacts_phone_e164_format exige ^\+\d{8,15}$ — um slice
+  // de UUID contém hex (a–f) e estoura o CHECK de forma intermitente.
+  const simulationPhone = `+55000${randomInt(0, 1_000_000_000).toString().padStart(9, "0")}`;
   const { data: contact, error: contactError } = await supabase
     .from("contacts")
     .insert({
