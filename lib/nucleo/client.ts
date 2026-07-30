@@ -6,9 +6,18 @@
  */
 export type ApiEnvelope<T> = { data?: T; error?: { message?: string } };
 
-export async function request<T>(url: string, init?: RequestInit): Promise<T> {
+export interface RequestOptions {
+  /** Padrão 15s; execuções de agente (RAG + LLM) precisam de janela maior. */
+  readonly timeoutMs?: number;
+}
+
+export async function request<T>(
+  url: string,
+  init?: RequestInit,
+  options?: RequestOptions,
+): Promise<T> {
   const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), 15_000);
+  const timeoutId = window.setTimeout(() => controller.abort(), options?.timeoutMs ?? 15_000);
   try {
     const response = await fetch(url, {
       ...init,

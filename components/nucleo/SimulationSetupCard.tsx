@@ -4,6 +4,10 @@ import type { FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { CircleNotch } from "@/lib/ui/icons";
 
 interface SimulationSetupCardProps {
   readonly title: string;
@@ -27,7 +31,7 @@ export function SimulationSetupCard({
   onSubmit,
 }: SimulationSetupCardProps) {
   return (
-    <Card>
+    <Card className="nucleo-enter nucleo-enter-1">
       <CardHeader>
         <CardTitle>1. Criar conversa simulada</CardTitle>
         <CardDescription>
@@ -36,28 +40,36 @@ export function SimulationSetupCard({
       </CardHeader>
       <CardContent>
         <form className="grid gap-3" onSubmit={onSubmit}>
-          <input
-            className="rounded-md border bg-background px-3 py-2"
-            value={title}
-            onChange={(event) => onTitleChange(event.target.value)}
-            aria-label="Título da simulação"
-            required
-          />
-          <input
-            className="rounded-md border bg-background px-3 py-2"
-            value={contactName}
-            onChange={(event) => onContactNameChange(event.target.value)}
-            aria-label="Nome do contato"
-            required
-          />
-          <textarea
-            className="min-h-24 rounded-md border bg-background px-3 py-2"
-            value={initialMessage}
-            onChange={(event) => onInitialMessageChange(event.target.value)}
-            aria-label="Mensagem inicial"
-            required
-          />
+          <div className="grid gap-1.5">
+            <Label htmlFor="nucleo-sim-title">Título da simulação</Label>
+            <Input
+              id="nucleo-sim-title"
+              value={title}
+              onChange={(event) => onTitleChange(event.target.value)}
+              required
+            />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="nucleo-sim-contact">Nome do contato</Label>
+            <Input
+              id="nucleo-sim-contact"
+              value={contactName}
+              onChange={(event) => onContactNameChange(event.target.value)}
+              required
+            />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="nucleo-sim-message">Mensagem inicial</Label>
+            <Textarea
+              id="nucleo-sim-message"
+              className="min-h-24"
+              value={initialMessage}
+              onChange={(event) => onInitialMessageChange(event.target.value)}
+              required
+            />
+          </div>
           <Button type="submit" disabled={busy}>
+            {busy && <CircleNotch aria-hidden className="mr-2 size-4 animate-spin" />}
             Criar conversa de teste
           </Button>
         </form>
