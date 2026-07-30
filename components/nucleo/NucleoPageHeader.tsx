@@ -15,16 +15,24 @@ interface NucleoPageHeaderProps {
   readonly children?: ReactNode;
 }
 
+const PRODUTO = "Núcleo de Inteligência Operacional";
+
+function normaliza(valor: string): string {
+  return valor.trim().toLocaleLowerCase("pt-BR");
+}
+
 export function NucleoPageHeader({ title, subtitle, cta, children }: NucleoPageHeaderProps) {
   const org = useActiveOrg();
+  // Quando a organização se chama como o produto, repetir o nome não informa
+  // nada — só polui o cabeçalho.
+  const nomeOrg =
+    org?.name && normaliza(org.name) !== normaliza(PRODUTO) ? org.name : null;
   return (
     <header className="nucleo-enter flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div>
         <p className="text-sm font-medium text-primary">
-          Núcleo de Inteligência Operacional
-          {org?.name ? (
-            <span className="text-muted-foreground"> · {org.name}</span>
-          ) : null}
+          {PRODUTO}
+          {nomeOrg ? <span className="text-muted-foreground"> · {nomeOrg}</span> : null}
         </p>
         <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
         <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
