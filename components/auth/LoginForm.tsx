@@ -9,7 +9,7 @@ import { loginSchema, type LoginInput } from "@/lib/auth/schemas";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { signInWithPassword } from "@/app/actions/auth/signInWithPassword";
+import { signInWithFormData, signInWithPassword } from "@/app/actions/auth/signInWithPassword";
 
 export function LoginForm({ next }: { next?: string }) {
   const router = useRouter();
@@ -55,8 +55,10 @@ export function LoginForm({ next }: { next?: string }) {
     });
   };
 
+  const fallbackAction = signInWithFormData.bind(null, next);
+
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+    <form action={fallbackAction} onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
       <div className="space-y-1.5">
         <Label htmlFor="email">Email</Label>
         <Input

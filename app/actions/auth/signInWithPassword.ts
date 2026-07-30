@@ -82,3 +82,23 @@ export async function signInWithPassword(
   // Server-side redirect ensures fresh session cookie is sent to browser.
   redirect(next || "/app/inbox");
 }
+
+/**
+ * Fallback seguro para o formulário HTML antes da hidratação do React.
+ *
+ * Um `<form>` sem action de servidor faz GET por padrão e pode vazar a senha
+ * na URL. Este adaptador mantém o mesmo fluxo de login, mas recebe o FormData
+ * via Server Action (POST) e nunca serializa credenciais na barra do navegador.
+ */
+export async function signInWithFormData(
+  next: string | undefined,
+  formData: FormData,
+): Promise<SignInResult> {
+  return signInWithPassword(
+    {
+      email: String(formData.get("email") ?? ""),
+      password: String(formData.get("password") ?? ""),
+    },
+    next,
+  );
+}
