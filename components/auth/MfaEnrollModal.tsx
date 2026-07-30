@@ -88,27 +88,20 @@ export function MfaEnrollModal() {
                 Configure a verificação em duas etapas
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Sua conta exige 2FA. Use um aplicativo autenticador (Google
-                Authenticator, 1Password, Authy, Bitwarden) para gerar códigos
-                de 6 dígitos.
+                Sua conta exige 2FA. Use um aplicativo autenticador (Google Authenticator,
+                1Password, Authy, Bitwarden) para gerar códigos de 6 dígitos.
               </p>
             </div>
             {error && (
-              <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              <div className="border-destructive/30 bg-destructive/10 rounded-md border px-3 py-2 text-sm text-destructive">
                 {error}
               </div>
             )}
-            <Button
-              type="button"
-              className="w-full"
-              onClick={() => {
-                setError(null);
-                setStep("scan");
-              }}
-              disabled={isPending}
-            >
-              Iniciar configuração
-            </Button>
+            <form method="post" action="/api/auth/mfa/enroll">
+              <Button type="submit" className="w-full" disabled={isPending}>
+                Iniciar configuração
+              </Button>
+            </form>
           </div>
         )}
 
@@ -119,8 +112,8 @@ export function MfaEnrollModal() {
                 Escaneie o QR code
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Abra seu app autenticador, adicione uma nova conta e digite o
-                código de 6 dígitos abaixo.
+                Abra seu app autenticador, adicione uma nova conta e digite o código de 6 dígitos
+                abaixo.
               </p>
             </div>
 
@@ -150,9 +143,7 @@ export function MfaEnrollModal() {
                 </details>
 
                 <div className="space-y-3">
-                  <p className="text-center text-sm font-medium">
-                    Digite o código de 6 dígitos
-                  </p>
+                  <p className="text-center text-sm font-medium">Digite o código de 6 dígitos</p>
                   <TOTPInput
                     value={code}
                     onChange={setCode}
@@ -162,7 +153,7 @@ export function MfaEnrollModal() {
                     hasError={!!error}
                   />
                   {error && (
-                    <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-center text-sm text-destructive">
+                    <div className="border-destructive/30 bg-destructive/10 rounded-md border px-3 py-2 text-center text-sm text-destructive">
                       {error}
                     </div>
                   )}

@@ -1,19 +1,13 @@
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { isMfaEnrolled, loadAuthUser, requiresMfa, resolveActiveOrg } from "@/lib/auth/server";
 import { DEFAULT_VISIBILITY_MODE, type VisibilityMode } from "@/lib/auth/types";
 import { AuthProvider } from "@/hooks/auth/AuthProvider";
 import { AppShell } from "./_components/AppShell";
 import { MfaEnrollGate } from "@/components/auth/MfaEnrollGate";
 import { createAdminClient } from "@/lib/supabase/admin";
-import {
-  IMPERSONATE_COOKIE_NAME,
-  verifyImpersonateCookie,
-} from "@/lib/impersonate/cookie";
-import {
-  ImpersonateBanner,
-  type ImpersonatingInfo,
-} from "@/components/app/ImpersonateBanner";
+import { IMPERSONATE_COOKIE_NAME, verifyImpersonateCookie } from "@/lib/impersonate/cookie";
+import { ImpersonateBanner, type ImpersonatingInfo } from "@/components/app/ImpersonateBanner";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await loadAuthUser();
@@ -34,8 +28,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     if (orgRow?.status === "suspended") redirect("/account-suspended");
     // G4-02: expõe visibility_mode ao client (inbox decide visões visíveis).
     // Fonte confiável (admin client, org do cookie validado) — nunca do body.
-    const mode = (orgRow?.settings as { visibility_mode?: VisibilityMode } | null)
-      ?.visibility_mode;
+    const mode = (orgRow?.settings as { visibility_mode?: VisibilityMode } | null)?.visibility_mode;
     activeOrg = { ...activeOrg, visibility_mode: mode ?? DEFAULT_VISIBILITY_MODE };
   }
 
@@ -67,6 +60,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     }
   }
 
+  const requestHeaders = await headers();
+  const isMfaEnrollmentPage = requestHeaders.get("x-pathname") === "/app/nucleo/mfa-enroll";
   const enrolled = await isMfaEnrolled();
   const needsMfaGate = requiresMfa(activeOrg?.role, user.is_platform_admin);
   const shell = <AppShell sidebarCollapsed={collapsed}>{children}</AppShell>;
@@ -74,7 +69,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <AuthProvider user={user} activeOrg={activeOrg}>
       <ImpersonateBanner impersonating={impersonating} />
-      {needsMfaGate ? (
+      {needsMfaGate && !isMfaEnrollmentPage ? (
         // Gate always mounted for MFA-required roles; it latches the blocking
         // decision client-side so the enroll Server Action's revalidation
         // can't tear down the recovery-codes screen mid-flow.

@@ -24,10 +24,7 @@ export type SignInResult = {
  *
  * On failure: returns an error discriminator. Caller renders inline message.
  */
-export async function signInWithPassword(
-  input: LoginInput,
-  next?: string,
-): Promise<SignInResult> {
+export async function signInWithPassword(input: LoginInput, next?: string): Promise<SignInResult> {
   const parsed = loginSchema.safeParse(input);
   if (!parsed.success) {
     return {
@@ -93,8 +90,8 @@ export async function signInWithPassword(
 export async function signInWithFormData(
   next: string | undefined,
   formData: FormData,
-): Promise<SignInResult> {
-  return signInWithPassword(
+): Promise<void> {
+  await signInWithPassword(
     {
       email: String(formData.get("email") ?? ""),
       password: String(formData.get("password") ?? ""),
