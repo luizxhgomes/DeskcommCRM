@@ -1,2 +1,9 @@
 import { NucleoDashboard } from "@/components/nucleo/NucleoDashboard";
-export default function SquadsPage() { return <NucleoDashboard mode="squads" />; }
+import { getNucleoDashboardInitialData } from "@/lib/nucleo/dashboard";
+
+export const dynamic = "force-dynamic";
+
+export default async function SquadsPage() {
+  const initial = await getNucleoDashboardInitialData();
+  return <NucleoDashboard mode="squads" initialData={initial.data} initialError={initial.error} />;
+}
