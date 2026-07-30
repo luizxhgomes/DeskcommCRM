@@ -56,7 +56,6 @@ export async function GET(): Promise<Response> {
     agents: agentsBySquad.get(squad.id) ?? 0,
     chief_agent_id: chiefBySquad.get(squad.id) ?? null,
     focus: squad.manifest?.description ?? "Especialistas operacionais",
-    status: "Pronto" as const,
   }));
 
   return ok(squads, { requestId, meta: { total: squads.length } });

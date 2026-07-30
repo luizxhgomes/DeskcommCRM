@@ -1,6 +1,8 @@
 "use client";
 
+import { EmptyState } from "@/components/empty";
 import type { NucleoDashboardInitialData } from "@/lib/nucleo/types";
+import { Sparkle } from "@/lib/ui/icons";
 
 import { NucleoPageHeader } from "./NucleoPageHeader";
 import { OperationalError } from "./OperationalError";
@@ -21,12 +23,17 @@ export function SquadsView({ initialData, initialError }: SquadsViewProps) {
         cta={{ href: "/app/nucleo/command", label: "Abrir Sala de Comando" }}
       />
       <OperationalError message={initialError} />
-      <SquadsGrid squads={squads} />
-      {!initialError && squads.length === 0 && (
-        <p className="rounded-md border p-4 text-sm text-muted-foreground">
-          Nenhum squad foi carregado. Rode o seed local do Núcleo antes de utilizar o painel.
-        </p>
-      )}
+      <div className="nucleo-enter nucleo-enter-1">
+        <SquadsGrid squads={squads} />
+        {!initialError && squads.length === 0 && (
+          <EmptyState
+            icon={Sparkle}
+            headline="Nenhum squad carregado"
+            subcopy="Rode o seed local do Núcleo (make seed) para materializar os squads desta organização."
+            primary={{ label: "Voltar ao Cockpit", href: "/app/nucleo" }}
+          />
+        )}
+      </div>
     </main>
   );
 }

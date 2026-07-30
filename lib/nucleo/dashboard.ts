@@ -15,7 +15,6 @@ export type NucleoSquadSummary = {
   agents: number;
   chief_agent_id: string | null;
   focus: string;
-  status: string;
 };
 
 type CostPoint = { day: string; cost: number };
@@ -165,7 +164,6 @@ export async function getNucleoDashboardInitialData(): Promise<
     agents: agentsBySquad.get(squad.id) ?? 0,
     chief_agent_id: chiefBySquad.get(squad.id) ?? null,
     focus: squad.manifest?.description ?? "Especialistas operacionais",
-    status: "Pronto",
   }));
 
   const days = Array.from({ length: 7 }, (_, offset) => {
