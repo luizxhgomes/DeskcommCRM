@@ -21,6 +21,13 @@ vi.mock("ai", () => ({
   embed: (args: unknown) => embedSpy(args),
 }));
 
+// Env controlado: sem isto o resultado depende do `.env.local` da máquina
+// (OPENROUTER_API_KEY presente muda a rota BYOK) e o teste passa/falha por
+// credencial que ele não usa — o mesmo defeito que o mock de
+// `isEmbeddingProviderConfigured` já corrige logo abaixo.
+const envMock = vi.hoisted(() => ({ OPENROUTER_API_KEY: "", OPENAI_API_KEY: "sk-test" }));
+vi.mock("@/lib/env", () => ({ env: envMock }));
+
 vi.mock("@/lib/ai/gateway", async () => {
   const real = await vi.importActual<typeof import("@/lib/ai/gateway")>("@/lib/ai/gateway");
   return {
@@ -43,6 +50,8 @@ beforeEach(() => {
   embedSpy.mockReset();
   embedSpy.mockResolvedValue({ embedding: [0.1, 0.2], usage: { tokens: 7 } });
   gatewayConfigMock = () => null;
+  envMock.OPENROUTER_API_KEY = "";
+  envMock.OPENAI_API_KEY = "sk-test";
 });
 
 describe("embedText", () => {
@@ -68,6 +77,19 @@ describe("embedText", () => {
     const arg = embedSpy.mock.calls[0]?.[0] as { model: unknown; headers?: Record<string, string> };
     expect(arg.model).toBe("openai/text-embedding-3-small");
     expect(arg.headers?.["X-AI-Gateway-Tenant-Id"]).toBe("org-1");
+  });
+
+  it("COM chave OpenRouter, ignora o gateway e usa o provider explícito (ADR 0001)", async () => {
+    envMock.OPENROUTER_API_KEY = "or-key";
+    gatewayConfigMock = () => ({ apiKey: "gw-key" });
+
+    await embedText("oi", { organizationId: "org-1" });
+
+    const arg = embedSpy.mock.calls[0]?.[0] as { model: unknown; headers?: unknown };
+    // BYOK OpenRouter é a instalação canônica do Núcleo: uma chave de gateway
+    // herdada no ambiente não pode desviar embeddings para outro provedor.
+    expect(arg.model).toBeTypeOf("object");
+    expect(arg.headers).toBeUndefined();
   });
 
   it("devolve a contagem de tokens que o SDK reporta", async () => {
