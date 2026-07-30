@@ -83,6 +83,8 @@ export interface RunModelCallInput {
    * não é vazia. NUNCA um id hardcoded: o valor vem de config de quem chama.
    */
   model?: string;
+  /** Perfil do portfólio Núcleo: habilita cascata auditável de candidatos OpenRouter. */
+  modelProfile?: string;
   /**
    * Teto do loop de tool-calls do generateText (vira stopWhen: stepCountIs). Sem
    * ele o SDK para no 1º step (default stepCountIs(1)) — tools executam mas o
@@ -100,6 +102,80 @@ export interface RunModelCallInput {
 export interface RunModelCallDeps {
   registry?: ProviderRegistry;
   log?: Logger;
+}
+
+type ModelCandidate = {
+  profileId: string | null;
+  model: string;
+  fallbackKind: 'primary' | 'paid' | 'free';
+};
+
+async function resolveModelCandidates(
+  db: pg.Pool,
+  organizationId: string,
+  provider: string,
+  requestedModel: string,
+  profileSlug?: string,
+): Promise<ModelCandidate[]> {
+  if (provider !== 'openrouter' || profileSlug === undefined) {
+    return [{ profileId: null, model: requestedModel, fallbackKind: 'primary' }];
+  }
+  const { rows } = await db.query<{
+    profile_id: string;
+    model_id: string;
+    fallback_kind: ModelCandidate['fallbackKind'];
+  }>(
+    `select p.id as profile_id, c.model_id, c.fallback_kind
+       from nucleo_model_profiles p
+       join nucleo_model_profile_candidates c on c.profile_id = p.id and c.organization_id = p.organization_id
+      where p.organization_id = $1 and p.slug = $2 and p.is_active and c.is_active
+        and (c.fallback_kind <> 'free' or p.allow_degraded_free)
+      order by c.priority asc`,
+    [organizationId, profileSlug],
+  );
+  if (rows.length === 0) {
+    return [{ profileId: null, model: requestedModel, fallbackKind: 'primary' }];
+  }
+  const candidates = rows.map((row) => ({
+    profileId: row.profile_id,
+    model: row.model_id,
+    fallbackKind: row.fallback_kind,
+  }));
+  // O modelo publicado continua primeira escolha mesmo se uma operação manual
+  // ainda não sincronizou o candidato primário do perfil.
+  if (!candidates.some((candidate) => candidate.model === requestedModel)) {
+    candidates.unshift({ profileId: candidates[0]!.profileId, model: requestedModel, fallbackKind: 'primary' });
+  }
+  return candidates;
+}
+
+async function recordModelAttempt(
+  db: pg.Pool,
+  input: RunModelCallInput,
+  candidate: ModelCandidate,
+  attemptNumber: number,
+  status: 'attempted' | 'succeeded' | 'failed',
+  details: { llmCallId?: string | null; error?: unknown } = {},
+): Promise<void> {
+  if (candidate.profileId === null) return;
+  const error = details.error instanceof Error ? details.error.message.slice(0, 500) : null;
+  await db.query(
+    `insert into nucleo_model_attempts
+       (organization_id, profile_id, llm_call_id, job_id, provider, model_id, attempt_number, fallback_kind, status, error_code, error_message)
+     values ($1, $2, $3, $4, 'openrouter', $5, $6, $7, $8, $9, $10)`,
+    [
+      input.tenantId,
+      candidate.profileId,
+      details.llmCallId ?? null,
+      input.jobId ?? null,
+      candidate.model,
+      attemptNumber,
+      candidate.fallbackKind,
+      status,
+      error === null ? null : 'provider_error',
+      error,
+    ],
+  );
 }
 
 /**
@@ -144,14 +220,14 @@ export async function runModelCall(db: pg.Pool, cfg: LlmEdgeConfig, input: RunMo
 
   await assertBudget(db, input.tenantId, config.monthlyBudgetCents);
 
-  const model = input.model ?? config.defaultModel;
-  if (model === null || model === undefined) {
+  const requestedModel = input.model ?? config.defaultModel;
+  if (requestedModel === null || requestedModel === undefined) {
     throw new Error(
       'modelo LLM não definido — configure organizations.settings.llm.default_model ou passe input.model',
     );
   }
-  if (config.enabledModels.length > 0 && !config.enabledModels.includes(model)) {
-    throw new LlmModelNotEnabledError(model);
+  if (config.enabledModels.length > 0 && !config.enabledModels.includes(requestedModel)) {
+    throw new LlmModelNotEnabledError(requestedModel);
   }
   const factory = registry[config.provider];
   if (factory === undefined) {
@@ -173,20 +249,36 @@ export async function runModelCall(db: pg.Pool, cfg: LlmEdgeConfig, input: RunMo
     cacheTtl: cfg.cacheTtl ?? '1h',
   });
 
+  const candidates = await resolveModelCandidates(db, input.tenantId, config.provider, requestedModel, input.modelProfile);
   const startedAt = Date.now();
   // `system` aceita SystemModelMessage (com providerOptions de cache) — igual
   // em v6 e v7 (smoke prova que o cacheControl continua virando cache_control).
-  const result = await generateText({
-    model: factory(config.apiKey, model),
-    system: prefix.system,
-    messages: input.messages,
-    tools: prefix.tools,
-    stopWhen: input.maxSteps === undefined ? undefined : stepCountIs(input.maxSteps),
-    temperature,
-    topP,
-    topK,
-    maxOutputTokens,
-  });
+  let result: Awaited<ReturnType<typeof generateText>> | null = null;
+  let selected: ModelCandidate | null = null;
+  let lastError: unknown;
+  for (const [index, candidate] of candidates.entries()) {
+    await recordModelAttempt(db, input, candidate, index + 1, 'attempted');
+    try {
+      result = await generateText({
+        model: factory(config.apiKey, candidate.model),
+        system: prefix.system,
+        messages: input.messages,
+        tools: prefix.tools,
+        stopWhen: input.maxSteps === undefined ? undefined : stepCountIs(input.maxSteps),
+        temperature,
+        topP,
+        topK,
+        maxOutputTokens,
+      });
+      selected = candidate;
+      break;
+    } catch (error) {
+      lastError = error;
+      await recordModelAttempt(db, input, candidate, index + 1, 'failed', { error });
+    }
+  }
+  if (result === null || selected === null) throw lastError ?? new Error('nenhum candidato de modelo respondeu');
+  const model = selected.model;
   const latencyMs = Date.now() - startedAt;
 
   const usage = {
@@ -219,6 +311,7 @@ export async function runModelCall(db: pg.Pool, cfg: LlmEdgeConfig, input: RunMo
       latencyMs,
     ],
   );
+  await recordModelAttempt(db, input, selected, candidates.indexOf(selected) + 1, 'succeeded', { llmCallId: rows[0]?.id ?? null });
 
   // Só métricas — nunca conteúdo de mensagem (PII) nem chave.
   deps.log?.info('llm: chamada concluída', {

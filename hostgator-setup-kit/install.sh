@@ -197,6 +197,10 @@ v_anthropic() {
   esac
 }
 
+v_openrouter() {
+  case "$1" in sk-or-*) ;; *) echo "A chave do OpenRouter começa com 'sk-or-'. Pegue em openrouter.ai/keys."; return 1;; esac
+}
+
 v_openai() {
   [ -z "$1" ] && return 0   # opcional
   case "$1" in sk-*) ;; *) echo "A chave da OpenAI começa com 'sk-'. Pegue em platform.openai.com > API keys (ou deixe em branco)."; return 1;; esac
@@ -343,7 +347,8 @@ FIELDS=(
   "NEXT_PUBLIC_SUPABASE_ANON_KEY|Supabase anon key (Settings > API)||v_anon||"
   "SUPABASE_SERVICE_ROLE_KEY|Supabase service_role key (Settings > API)||v_service|secret|"
   "SUPABASE_DB_URL|Supabase connection string — Session pooler, modo URI (Settings > Database)||v_db_url|secret|"
-  "ANTHROPIC_API_KEY|Chave da Anthropic — a IA que atende (console.anthropic.com)||v_anthropic|secret|"
+  "OPENROUTER_API_KEY|Chave do OpenRouter — IA de chat e agentes do Núcleo (openrouter.ai/keys)||v_openrouter|secret|"
+  "ANTHROPIC_API_KEY|Fallback opcional da Anthropic para classifier (Enter pula)||v_anthropic|secret|opcional"
   "OPENAI_API_KEY|Chave da OpenAI — ouvir áudios do WhatsApp e usar a base de conhecimento (Enter pula)||v_openai|secret|opcional"
   "OWNER_EMAIL|E-mail do primeiro admin (dono)||v_email||"
   "OWNER_PASSWORD|Senha do primeiro admin (mínimo 8 caracteres)||v_password|secret|"
@@ -459,6 +464,7 @@ envq() { printf "%s='%s'\n" "$1" "$(printf '%s' "${2-}" | sed "s/'/'\\\\''/g")";
   printf '# imagem pública para trocar o texto por logo na sidebar. Ver lib/branding.ts.\n'
   envq APP_NAME "$APP_NAME"
   envq APP_LOGO_URL "${APP_LOGO_URL:-}"
+  envq OPENROUTER_API_KEY "$OPENROUTER_API_KEY"
   envq ANTHROPIC_API_KEY "$ANTHROPIC_API_KEY"
   envq AI_GATEWAY_API_KEY "${AI_GATEWAY_API_KEY:-}"
   printf '# OpenAI: transcrição dos áudios do WhatsApp (Whisper) + embeddings do RAG.\n'

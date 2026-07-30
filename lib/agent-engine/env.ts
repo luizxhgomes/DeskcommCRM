@@ -18,6 +18,9 @@ const envSchema = z.object({
   // ai_provider_credentials). Opcional no boot: sem ela e sem BYOK, o turno
   // falha com erro instrutivo — nunca silêncio.
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
+  // OpenRouter é o provider principal do Núcleo; opcional no boot porque BYOK
+  // por organização continua suportado e ausência deve falhar só no turno.
+  OPENROUTER_API_KEY: z.string().min(1).optional(),
   // Modelo default do agente quando a org não define o dela (knob, nunca constante).
   AGENT_DEFAULT_MODEL: z.string().min(1).default('claude-sonnet-4-5'),
   // Teto de conexões por pool do pg. Sem valor = pg decide (default 10).

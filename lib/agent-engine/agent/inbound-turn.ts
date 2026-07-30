@@ -1604,6 +1604,7 @@ export async function runAgentTurn(
         ? {
             model: agentConfig.model,
             llmOverride: { provider: agentConfig.provider, credentialId: agentConfig.credentialId },
+            ...(typeof agentConfig.modelProfile === 'string' ? { modelProfile: agentConfig.modelProfile } : {}),
           }
         : {}),
     },
@@ -1656,6 +1657,7 @@ export async function runAgentTurn(
         ? {
             model: agentConfig.model,
             llmOverride: { provider: agentConfig.provider, credentialId: agentConfig.credentialId },
+            ...(typeof agentConfig.modelProfile === 'string' ? { modelProfile: agentConfig.modelProfile } : {}),
           }
         : {}),
       system,

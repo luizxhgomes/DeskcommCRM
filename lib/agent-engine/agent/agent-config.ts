@@ -41,6 +41,8 @@ export interface PublishedAgentConfig {
   /** knobs de RAG do ai_agents.config (defaults do guardrails-schema: 5 / 0.72). */
   ragTopK: number;
   ragSimilarityThreshold: number;
+  /** Perfil Núcleo opcional; ausência preserva integralmente agentes legados. */
+  modelProfile?: string | null;
   /** criadores (p/ mint do token efêmero de audit — padrão do runtime nativo). */
   versionCreatedBy: string | null;
   agentCreatedBy: string | null;
@@ -95,7 +97,11 @@ const SELECT_AGENT_CONFIG_COLUMNS = `a.id as agent_id,
 /** Mapeamento Row (snake_case do banco) → PublishedAgentConfig, compartilhado
  * pelas duas variantes de loader (por channel_session e por agent id). */
 function mapAgentConfigRow(r: Row): PublishedAgentConfig {
-  const cfg = (r.config ?? {}) as { rag_top_k?: unknown; rag_similarity_threshold?: unknown };
+  const cfg = (r.config ?? {}) as {
+    rag_top_k?: unknown;
+    rag_similarity_threshold?: unknown;
+    nucleo?: { model_profile?: unknown };
+  };
   const ragTopK =
     typeof cfg.rag_top_k === 'number' && Number.isInteger(cfg.rag_top_k) && cfg.rag_top_k >= 1 && cfg.rag_top_k <= 20
       ? cfg.rag_top_k
@@ -104,6 +110,10 @@ function mapAgentConfigRow(r: Row): PublishedAgentConfig {
     typeof cfg.rag_similarity_threshold === 'number' && cfg.rag_similarity_threshold >= 0 && cfg.rag_similarity_threshold <= 1
       ? cfg.rag_similarity_threshold
       : 0.72;
+  const modelProfile =
+    typeof cfg.nucleo?.model_profile === 'string' && /^[a-z0-9_-]+$/.test(cfg.nucleo.model_profile)
+      ? cfg.nucleo.model_profile
+      : null;
 
   return {
     agentId: r.agent_id,
@@ -126,6 +136,7 @@ function mapAgentConfigRow(r: Row): PublishedAgentConfig {
     activeKbVersionId: r.active_kb_version_id,
     ragTopK,
     ragSimilarityThreshold,
+    modelProfile,
     versionCreatedBy: r.version_created_by,
     agentCreatedBy: r.agent_created_by,
   };

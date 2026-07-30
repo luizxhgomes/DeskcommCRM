@@ -19,6 +19,8 @@ import type { CacheTtl } from './stable-prefix';
 export interface LlmEdgeConfig {
   /** chave de plataforma (fallback quando a org não tem BYOK). Opcional no boot. */
   anthropicApiKey?: string;
+  /** Chave de plataforma OpenRouter; BYOK da organização continua preferencial. */
+  openrouterApiKey?: string;
   /**
    * TTL do prefixo estável de cache (knob LLM_CACHE_TTL). Opcional para quem
    * monta a config na mão (testes) — o seam aplica a doutrina '1h' quando ausente.
@@ -28,6 +30,7 @@ export interface LlmEdgeConfig {
 
 export function llmEdgeConfigFromEnv(env: {
   ANTHROPIC_API_KEY?: string;
+  OPENROUTER_API_KEY?: string;
   LLM_CACHE_TTL?: string;
 }): LlmEdgeConfig {
   const ttl = env.LLM_CACHE_TTL ?? '1h';
@@ -36,6 +39,7 @@ export function llmEdgeConfigFromEnv(env: {
   }
   return {
     ...(env.ANTHROPIC_API_KEY ? { anthropicApiKey: env.ANTHROPIC_API_KEY } : {}),
+    ...(env.OPENROUTER_API_KEY ? { openrouterApiKey: env.OPENROUTER_API_KEY } : {}),
     cacheTtl: ttl,
   };
 }
@@ -45,7 +49,7 @@ export class LlmNotConfiguredError extends Error {
   override readonly name = 'llm_not_configured';
   constructor() {
     super(
-      'org sem credencial LLM utilizável — cadastre uma chave BYOK ativa/validada em ai_provider_credentials ou defina ANTHROPIC_API_KEY (fallback de plataforma, só provider anthropic)',
+      'org sem credencial LLM utilizável — cadastre uma chave BYOK ativa/validada em ai_provider_credentials ou defina ANTHROPIC_API_KEY/OPENROUTER_API_KEY para o provider correspondente',
     );
   }
 }
@@ -82,7 +86,7 @@ const llmSettingsSchema = z
 /**
  * Resolve a config LLM da org: knobs de organizations.settings->'llm' + credencial
  * BYOK mais recente ativa/validada de ai_provider_credentials (decifrada com
- * aes_gcm). Sem BYOK → fallback cfg.anthropicApiKey (só anthropic). Sem nada →
+ * aes_gcm). Sem BYOK → fallback de plataforma do provider (Anthropic/OpenRouter).
  * LlmNotConfiguredError. Chamada a cada run — troca de config vale no run seguinte.
  */
 /**
@@ -151,6 +155,8 @@ export async function resolveOrgLlmConfig(
     });
   } else if (provider === 'anthropic' && cfg.anthropicApiKey) {
     apiKey = cfg.anthropicApiKey;
+  } else if (provider === 'openrouter' && cfg.openrouterApiKey) {
+    apiKey = cfg.openrouterApiKey;
   } else {
     throw new LlmNotConfiguredError();
   }

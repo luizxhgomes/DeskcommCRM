@@ -125,12 +125,14 @@ function buildSentinelRegex(keywords: string[]): RegExp | null {
  * "Unauthenticated. Configure AI_GATEWAY_API_KEY or use a provider module.",
  * which is exactly what this does — a direct provider module per `provider`.
  */
-function buildModel(provider: string, apiKey: string, modelId: string): LanguageModel {
+export function buildModel(provider: string, apiKey: string, modelId: string): LanguageModel {
   switch (provider) {
     case "anthropic":
       return createAnthropic({ apiKey })(modelId);
     case "openai":
       return createOpenAI({ apiKey })(modelId);
+    case "openrouter":
+      return createOpenAI({ apiKey, baseURL: "https://openrouter.ai/api/v1" })(modelId);
     case "google":
       return createGoogleGenerativeAI({ apiKey })(modelId);
     default:
