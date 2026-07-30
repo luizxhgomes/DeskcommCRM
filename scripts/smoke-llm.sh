@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Gate de release / upgrade de major do AI SDK (regra dura 16): sobe um Postgres
 # efêmero (mesma receita do test-db.sh: pgvector + prelude + baseline install) e
-# roda scripts/smoke-llm.ts contra o MODELO REAL. Exige ANTHROPIC_API_KEY no env.
+# roda scripts/smoke-llm.ts contra o modelo real via OpenRouter (ou Anthropic
+# direto se escolhido explicitamente).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -9,7 +10,15 @@ PORT="${SMOKE_DB_PORT:-54331}"
 CONTAINER="deskcomm-smoke-db-$$"
 IMAGE="pgvector/pgvector:pg17"
 
-[ -n "${ANTHROPIC_API_KEY:-}" ] || { echo "FATAL: exporte ANTHROPIC_API_KEY (o smoke usa o modelo real)" >&2; exit 1; }
+SMOKE_PROVIDER="${SMOKE_PROVIDER:-}"
+if [ -z "$SMOKE_PROVIDER" ]; then
+  if [ -n "${OPENROUTER_API_KEY:-}" ]; then SMOKE_PROVIDER="openrouter"; else SMOKE_PROVIDER="anthropic"; fi
+fi
+case "$SMOKE_PROVIDER" in
+  openrouter) [ -n "${OPENROUTER_API_KEY:-}" ] || { echo "FATAL: exporte OPENROUTER_API_KEY" >&2; exit 1; } ;;
+  anthropic) [ -n "${ANTHROPIC_API_KEY:-}" ] || { echo "FATAL: exporte ANTHROPIC_API_KEY" >&2; exit 1; } ;;
+  *) echo "FATAL: SMOKE_PROVIDER deve ser openrouter ou anthropic" >&2; exit 1 ;;
+esac
 
 cleanup() { docker rm -f "$CONTAINER" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
@@ -34,6 +43,7 @@ echo "==> smoke contra o modelo real"
 # lib/env (importado transitivamente por aes_gcm) valida vars do APP que o
 # smoke não usa — placeholders bastam, nada disso é chamado no caminho do LLM.
 SMOKE_DB_URL="postgresql://postgres:postgres@127.0.0.1:${PORT}/postgres" \
+  SMOKE_PROVIDER="$SMOKE_PROVIDER" \
   NEXT_PUBLIC_SUPABASE_URL="${NEXT_PUBLIC_SUPABASE_URL:-https://placeholder.supabase.co}" \
   NEXT_PUBLIC_SUPABASE_ANON_KEY="${NEXT_PUBLIC_SUPABASE_ANON_KEY:-placeholder-anon}" \
   SUPABASE_SERVICE_ROLE_KEY="${SUPABASE_SERVICE_ROLE_KEY:-placeholder-service}" \

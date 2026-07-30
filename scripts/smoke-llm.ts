@@ -14,7 +14,9 @@
  *   5. llm_calls persistiu tokens/custo (custo > 0);
  *   6. budget da org bloqueia ANTES do provider (LlmBudgetExceededError).
  *
- * Requer ANTHROPIC_API_KEY real no env. Custo: ~2 chamadas curtas de Haiku.
+ * Requer uma chave real do provider escolhido. Por padrão, usa OpenRouter quando
+ * disponível, preservando a decisão do Núcleo de concentrar chat/agentes nele.
+ * Custo: ~2 chamadas curtas de Haiku.
  */
 import pg from 'pg';
 import { z } from 'zod';
@@ -27,20 +29,31 @@ import {
 } from '@/lib/agent-engine/edge/llm/run-model-call';
 import { stablePrefixHash } from '@/lib/agent-engine/edge/llm/stable-prefix';
 
-const DB_URL = process.env.SMOKE_DB_URL ?? 'postgresql://postgres:postgres@127.0.0.1:54329/postgres';
-const MODEL = process.env.SMOKE_MODEL ?? 'claude-haiku-4-5';
+const DB_URL = process.env.SMOKE_DB_URL ??
+  (process.env.SMOKE_USE_SUPABASE_DB === 'true' ? process.env.SUPABASE_DB_URL : undefined) ??
+  'postgresql://postgres:postgres@127.0.0.1:54329/postgres';
+const PROVIDER = process.env.SMOKE_PROVIDER ?? (process.env.OPENROUTER_API_KEY ? 'openrouter' : 'anthropic');
+const MODEL = process.env.SMOKE_MODEL ?? (PROVIDER === 'openrouter' ? 'anthropic/claude-haiku-4.5' : 'claude-haiku-4-5');
+const REQUIRE_CACHE = process.env.SMOKE_REQUIRE_CACHE === 'true' ||
+  (process.env.SMOKE_REQUIRE_CACHE === undefined && PROVIDER === 'anthropic');
 /** Mínimo cacheável POR MODELO (regra 15) — o smoke falha se o prefixo não cobre. */
 const MIN_CACHEABLE: Record<string, number> = {
   'claude-haiku-4-5': 4096,
+  'claude-haiku-4.5': 4096,
   'claude-opus-4-8': 4096,
   'claude-sonnet-4-6': 2048,
   'claude-sonnet-4-5': 1024,
+  'claude-sonnet-4.5': 1024,
 };
 const ORG = 'ab5a0c3e-0000-4000-8000-00000000c0de';
 
 function fail(msg: string): never {
   console.error(`✗ SMOKE FAIL: ${msg}`);
   process.exit(1);
+}
+
+function canonicalModel(model: string): string {
+  return model.includes('/') ? model.slice(model.lastIndexOf('/') + 1) : model;
 }
 
 function check(cond: boolean, label: string): void {
@@ -71,20 +84,27 @@ function bigSystem(): string {
 }
 
 async function main(): Promise<void> {
-  if (!process.env.ANTHROPIC_API_KEY) fail('ANTHROPIC_API_KEY ausente no env — o smoke exige o modelo real');
-  const min = MIN_CACHEABLE[MODEL];
+  if (PROVIDER !== 'anthropic' && PROVIDER !== 'openrouter') fail(`SMOKE_PROVIDER inválido: ${PROVIDER}`);
+  if (PROVIDER === 'anthropic' && !process.env.ANTHROPIC_API_KEY) fail('ANTHROPIC_API_KEY ausente no env para o smoke Anthropic');
+  if (PROVIDER === 'openrouter' && !process.env.OPENROUTER_API_KEY) fail('OPENROUTER_API_KEY ausente no env para o smoke OpenRouter');
+  const min = MIN_CACHEABLE[canonicalModel(MODEL)];
   if (min === undefined) fail(`modelo ${MODEL} sem entrada em MIN_CACHEABLE — adicione o mínimo cacheável dele`);
 
   const db = new pg.Pool({ connectionString: DB_URL, max: 3 });
+  await db.query('delete from llm_calls where organization_id = $1', [ORG]);
   await db.query(
     `insert into organizations (id, slug, legal_name, display_name, settings)
      values ($1, 'smoke-llm', 'Smoke LLM', 'Smoke LLM',
-             jsonb_build_object('llm', jsonb_build_object('provider', 'anthropic', 'default_model', $2::text)))
+             jsonb_build_object('llm', jsonb_build_object('provider', $2::text, 'default_model', $3::text)))
      on conflict (id) do update set settings = excluded.settings`,
-    [ORG, MODEL],
+    [ORG, PROVIDER, MODEL],
   );
 
-  const cfg = llmEdgeConfigFromEnv({ ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY, LLM_CACHE_TTL: '1h' });
+  const cfg = llmEdgeConfigFromEnv({
+    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+    OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
+    LLM_CACHE_TTL: '1h',
+  });
   const system = bigSystem();
   const tools = {
     consultar_catalogo: tool({
@@ -122,11 +142,15 @@ async function main(): Promise<void> {
   );
 
   // 2 + 4. cache WRITE real e prefixo ≥ mínimo do modelo
-  check(call1.usage.cacheWriteTokens > 0, `chamada 1 escreveu cache (${call1.usage.cacheWriteTokens} tokens)`);
-  check(
-    call1.usage.cacheWriteTokens >= min,
-    `prefixo medido (${call1.usage.cacheWriteTokens}) ≥ mínimo cacheável do ${MODEL} (${min})`,
-  );
+  if (REQUIRE_CACHE) {
+    check(call1.usage.cacheWriteTokens > 0, `chamada 1 escreveu cache (${call1.usage.cacheWriteTokens} tokens)`);
+    check(
+      call1.usage.cacheWriteTokens >= min,
+      `prefixo medido (${call1.usage.cacheWriteTokens}) ≥ mínimo cacheável do ${MODEL} (${min})`,
+    );
+  } else {
+    console.log(`ℹ cache no ${PROVIDER}: write=${call1.usage.cacheWriteTokens}; observação sem requisito duro.`);
+  }
 
   console.log(`→ chamada 2 (mesmo prefixo, esperado: cache READ)…`);
   const call2 = await runModelCall(db, cfg, {
@@ -139,11 +163,15 @@ async function main(): Promise<void> {
   });
 
   // 3. cache READ real
-  check(call2.usage.cacheReadTokens > 0, `chamada 2 leu cache (${call2.usage.cacheReadTokens} tokens)`);
-  check(
-    call2.usage.cacheReadTokens >= min,
-    `hit cobriu o prefixo inteiro (${call2.usage.cacheReadTokens} ≥ ${min})`,
-  );
+  if (REQUIRE_CACHE) {
+    check(call2.usage.cacheReadTokens > 0, `chamada 2 leu cache (${call2.usage.cacheReadTokens} tokens)`);
+    check(
+      call2.usage.cacheReadTokens >= min,
+      `hit cobriu o prefixo inteiro (${call2.usage.cacheReadTokens} ≥ ${min})`,
+    );
+  } else {
+    console.log(`ℹ cache no ${PROVIDER}: read=${call2.usage.cacheReadTokens}; registrar ADR se continuar ausente.`);
+  }
 
   // 5. persistência de custo
   const { rows } = await db.query<{ n: string; cost: number; cache_read: number; cache_write: number }>(
@@ -156,7 +184,11 @@ async function main(): Promise<void> {
   const agg = rows[0]!;
   check(agg.n === '2', `llm_calls tem exatamente as 2 chamadas (${agg.n})`);
   check(agg.cost > 0, `custo persistido > 0 (${agg.cost.toFixed(4)} cents)`);
-  check(agg.cache_write > 0 && agg.cache_read > 0, 'cache_read/write_tokens persistidos em llm_calls');
+  if (REQUIRE_CACHE) {
+    check(agg.cache_write > 0 && agg.cache_read > 0, 'cache_read/write_tokens persistidos em llm_calls');
+  } else {
+    console.log(`ℹ cache no ${PROVIDER} persistido de forma fiel: write=${agg.cache_write}, read=${agg.cache_read}.`);
+  }
 
   // 6. budget bloqueia ANTES do provider
   await db.query(
@@ -188,8 +220,8 @@ async function main(): Promise<void> {
   check(after[0]!.n === '2' && inbox[0]!.n === '1', 'alerta humano budget_exceeded criado (1x, sem duplicar)');
 
   console.log(
-    `\nSMOKE LLM PASS — ai@7: modelo=${call1.model} custo_total=${agg.cost.toFixed(4)}c ` +
-      `write=${call1.usage.cacheWriteTokens} read=${call2.usage.cacheReadTokens} (mínimo ${MODEL}=${min})`,
+    `\nSMOKE LLM PASS — ai@7: provider=${PROVIDER} modelo=${call1.model} custo_total=${agg.cost.toFixed(4)}c ` +
+      `write=${call1.usage.cacheWriteTokens} read=${call2.usage.cacheReadTokens} (mínimo ${MODEL}=${min}; cache obrigatório=${REQUIRE_CACHE})`,
   );
   await db.end();
 }

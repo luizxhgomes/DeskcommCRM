@@ -25,7 +25,8 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAI } from "@ai-sdk/openai";
-import { generateText, stepCountIs, type LanguageModel, type StopCondition, type ToolSet } from "ai";
+import { generateText, stepCountIs, tool, type LanguageModel, type StopCondition, type ToolSet } from "ai";
+import { z } from "zod";
 
 import { CredentialUnavailableError, loadCredential } from "@/lib/ai/credentials";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -41,6 +42,7 @@ import { mintEphemeralToken, revokeEphemeralToken } from "./mcp_token";
 import { pickToolsFromMcp, type RuntimeHandoffSignal } from "./tools";
 import { serializeSteps } from "./serialize";
 import { resolveWahaChatId } from "@/lib/waha/send";
+import { searchNucleoKnowledge } from "@/lib/nucleo/rag";
 
 export interface RunAgentInput {
   runId: string;
@@ -367,6 +369,19 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
       handoffToolEnabled: version.handoff_tool_enabled,
       handoffSignal,
     });
+    // F4 Núcleo: a mesma KB/RPC do agent-engine fica disponível no único
+    // dry-run público. É uma extensão read-only e não introduz runtime paralelo.
+    if (version.tool_ids?.includes("search_knowledge")) {
+      tools.search_knowledge = tool({
+        description: "Busca fatos na base de conhecimento ativa antes de responder perguntas do domínio.",
+        inputSchema: z.object({ query: z.string().min(3).max(1000) }),
+        execute: async ({ query }) => searchNucleoKnowledge(admin, {
+          organizationId: run.organization_id,
+          agentId: run.agent_id,
+          query,
+        }),
+      });
+    }
 
     // 8) Load history with budget.
     const history = run.conversation_id
@@ -432,6 +447,20 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
     });
     const latencyMs = Date.now() - startedAt;
     const trace = serializeSteps(result.steps as never);
+    const { error: llmCallError } = await admin.from("llm_calls").insert({
+      organization_id: run.organization_id,
+      contact_id: run.contact_id,
+      purpose: "agent_turn",
+      provider: version.provider,
+      model: version.model,
+      input_tokens: usage.inputTokens,
+      output_tokens: usage.outputTokens,
+      cache_read_tokens: result.usage.inputTokenDetails.cacheReadTokens ?? 0,
+      cache_write_tokens: result.usage.inputTokenDetails.cacheWriteTokens ?? 0,
+      cost_cents: cost,
+      latency_ms: latencyMs,
+    });
+    if (llmCallError) throw new Error(`llm_call_record_failed: ${llmCallError.message}`);
 
     // 13) Handoff via tool call?
     if (handoffSignal.triggered) {

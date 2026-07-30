@@ -36,7 +36,10 @@ export async function embedText(
     throw new Error("embed_unavailable: no AI_GATEWAY_API_KEY or OPENAI_API_KEY configured");
   }
   const model = opts.model ?? DEFAULT_EMBEDDING_MODEL;
-  const cfg = gatewayConfig();
+  // O Núcleo opera com BYOK OpenRouter nesta instalação. Mesmo que exista uma
+  // chave de AI Gateway herdada no ambiente, ela não deve desviar embeddings
+  // para saldo/configuração de outro provedor.
+  const cfg = env.OPENROUTER_API_KEY ? null : gatewayConfig();
 
   // COM gateway: a string `openai/text-embedding-3-small` é roteada por ele, que
   // lê `AI_GATEWAY_API_KEY` do process.env. Headers vão junto p/ observabilidade

@@ -31,7 +31,11 @@ export interface TokenUsage {
  * descontada e cobrada pela tarifa de cache.
  */
 export function costCents(model: string, usage: TokenUsage): number | null {
-  const priceKey = Object.keys(USD_PER_MTOK).find((prefix) => model.startsWith(prefix));
+  // OpenRouter preserva o slug do fornecedor (`anthropic/claude-…`). A tabela
+  // canônica usa o id do modelo; remover apenas esse prefixo evita transformar
+  // custos conhecidos em `null` e não altera ids que já são diretos.
+  const canonicalModel = model.includes("/") ? model.slice(model.lastIndexOf("/") + 1) : model;
+  const priceKey = Object.keys(USD_PER_MTOK).find((prefix) => canonicalModel.startsWith(prefix));
   if (priceKey === undefined) {
     return null;
   }
