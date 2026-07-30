@@ -1,9 +1,9 @@
-import { NucleoDashboard } from "@/components/nucleo/NucleoDashboard";
+import { CockpitView } from "@/components/nucleo/CockpitView";
 import { getNucleoDashboardInitialData } from "@/lib/nucleo/dashboard";
 
 export const dynamic = "force-dynamic";
 
 export default async function NucleoPage() {
   const initial = await getNucleoDashboardInitialData();
-  return <NucleoDashboard initialData={initial.data} initialError={initial.error} />;
+  return <CockpitView initialData={initial.data} initialError={initial.error} />;
 }
