@@ -1,0 +1,64 @@
+/*
+ * Motion do namespace Núcleo — carregado pelo layout deste segmento.
+ *
+ * Segue a doutrina de motion do app (ver o bloco .card-pulse em app/globals.css):
+ * vivo é o que RESPONDE — a animação roda uma vez e cessa, nunca `infinite`.
+ * Os tokens --duration-* e --ease-* vêm do tema global.
+ */
+
+/* Entrada progressiva de conteúdo: fade + leve subida, uma vez. */
+@keyframes nucleo-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.nucleo-enter {
+  animation: nucleo-enter var(--duration-base) var(--ease-out) both;
+}
+
+.nucleo-enter-1 { animation-delay: 40ms; }
+.nucleo-enter-2 { animation-delay: 80ms; }
+.nucleo-enter-3 { animation-delay: 120ms; }
+.nucleo-enter-4 { animation-delay: 160ms; }
+
+/*
+ * Flash de confirmação: anel na cor de ação que esvai — usado quando uma
+ * proposta muda de estado ou uma resposta chega. Replay por remontagem (key),
+ * como o card-pulse do kanban.
+ */
+@keyframes nucleo-flash {
+  from { border-color: var(--color-accent); }
+  to { border-color: transparent; }
+}
+
+.nucleo-flash {
+  border-width: 2px;
+  border-style: solid;
+  border-color: transparent;
+  animation: nucleo-flash var(--duration-slow) var(--ease-out) 1;
+}
+
+/*
+ * Reduced motion: o conteúdo aparece direto (nenhum sinal se perde) e o flash
+ * vira anel estático — o sinal permanece visível, parado, em vez de sumir.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .nucleo-enter,
+  .nucleo-enter-1,
+  .nucleo-enter-2,
+  .nucleo-enter-3,
+  .nucleo-enter-4 {
+    animation: none;
+  }
+
+  .nucleo-flash {
+    animation: none;
+    border-color: var(--color-accent);
+  }
+}
