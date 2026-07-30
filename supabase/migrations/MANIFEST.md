@@ -89,7 +89,7 @@ Migrations applied to Supabase project `rrydmwnporysaiysiztn` (sa-east-1, Postgr
 | `20260729000000` | `0092_stage_names_acentos` | Acentos nas etapas padrão do funil: o seed criava "Em separacao" e "Pos-venda" sem acento, e esses nomes aparecem no quadro principal. Corrige o seed e cura instalações existentes (só onde o nome padrão está intacto). |
 | `20260730033120` | `9000_nucleo_squads` | Núcleo F3: `nucleo_squads` e `nucleo_squad_agents`, portfólio de perfis/candidatos/tentativas com RLS por organização, e extensão aditiva dos três CHECKs core para `openrouter`. |
 | `20260730045355` | `9001_nucleo_ai_chunks_dedupe` | Núcleo F4: remove duplicatas exatas de chunks e torna o upsert de indexação determinístico por organização, versão e hash de conteúdo. |
-| `20260730060037` | `nucleo_local_command` | Núcleo F5: simulações locais e propostas de ações CRM com RLS por organização e aprovação humana explícita. |
+| `20260730060037` | `9002_nucleo_local_command` | Núcleo F5: simulações locais e propostas de ações CRM com RLS por organização e aprovação humana explícita. |
 
 ## Reproducibility
 

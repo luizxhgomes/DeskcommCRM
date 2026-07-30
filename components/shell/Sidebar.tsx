@@ -34,7 +34,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/app/ai/memory", label: "Memória da IA", icon: Brain, permission: "ai.memory.view" },
   { href: "/app/ai/skills", label: "Skills da IA", icon: PuzzlePiece, permission: "ai.skills.view" },
   { href: "/app/ai/evolution", label: "Evolução da IA", icon: ChartLineUp, permission: "ai.evolution.view" },
-  { href: "/app/nucleo", label: "Núcleo", icon: Sparkle },
+  { href: "/app/nucleo", label: "Núcleo", icon: Sparkle, permission: "ai.agents.view" },
   { href: "/app/webhooks", label: "Webhooks", icon: WebhooksLogo, permission: "webhooks.manage" },
   { href: "/app/settings", label: "Configurações", icon: Gear },
 ];
