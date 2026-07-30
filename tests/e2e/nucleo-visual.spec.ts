@@ -9,13 +9,27 @@ import { test, expect, type Page } from "@playwright/test";
 
 import { loadEnvLocal } from "./helpers/auth";
 
-/** Espera as animações de entrada terminarem — senão a evidência sai a meio fade. */
+/**
+ * Espera as animações terminarem — senão a evidência sai a meio fade. Cobre as
+ * de CSS (getAnimations) e as do recharts, que rodam em JS e por isso não
+ * aparecem naquela lista: para essas, aguarda o traçado da área estabilizar.
+ */
 async function animacoesConcluidas(page: Page): Promise<void> {
   await page.evaluate(async () => {
     await Promise.all(
       document.getAnimations().map((animation) => animation.finished.catch(() => undefined)),
     );
   });
+  const area = page.locator(".recharts-area-area").first();
+  if ((await area.count()) > 0) {
+    let anterior = "";
+    for (let tentativa = 0; tentativa < 20; tentativa += 1) {
+      const atual = (await area.getAttribute("d")) ?? "";
+      if (atual !== "" && atual === anterior) break;
+      anterior = atual;
+      await page.waitForTimeout(100);
+    }
+  }
 }
 
 const localEnv = loadEnvLocal();

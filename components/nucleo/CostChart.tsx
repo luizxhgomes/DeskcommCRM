@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -12,6 +13,23 @@ import {
 
 import { reais } from "@/lib/nucleo/presentation";
 
+/**
+ * O recharts anima via JS (react-smooth), fora do CSS — então o bloco
+ * prefers-reduced-motion do nucleo.css não o alcança e o media query precisa
+ * ser lido aqui.
+ */
+function usePrefereMenosMovimento(): boolean {
+  const [reduzido, setReduzido] = useState(false);
+  useEffect(() => {
+    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setReduzido(query.matches);
+    const aoMudar = (evento: MediaQueryListEvent) => setReduzido(evento.matches);
+    query.addEventListener("change", aoMudar);
+    return () => query.removeEventListener("change", aoMudar);
+  }, []);
+  return reduzido;
+}
+
 interface CostChartProps {
   readonly series: ReadonlyArray<{ day: string; cost: number }>;
 }
@@ -22,6 +40,7 @@ interface CostChartProps {
  * seria CSS inválido e derrubaria a cor para o default do recharts.
  */
 export function CostChart({ series }: CostChartProps) {
+  const semMovimento = usePrefereMenosMovimento();
   const hasCost = series.some((point) => point.cost > 0);
   if (!hasCost) {
     return (
@@ -69,6 +88,10 @@ export function CostChart({ series }: CostChartProps) {
           stroke="var(--color-accent)"
           strokeWidth={2}
           fill="url(#nucleo-cost)"
+          // O padrão do recharts é 1500ms — longo demais para um painel
+          // operacional. 320ms é o --duration-slow do tema.
+          isAnimationActive={!semMovimento}
+          animationDuration={320}
         />
       </AreaChart>
     </ResponsiveContainer>
