@@ -4,7 +4,7 @@
  *
  * Events handled:
  *   - nuvemshop.product_synced  → fetches product, embeds chunks, activates version
- *   - knowledge_source.updated  → stub (full reindex deferred to S-06.05..07)
+ *   - knowledge_source.updated  → extracts policy Markdown/PDF, embeds and activates KB
  *
  * Service-role caveat (CLAUDE.md §multi-tenancy): every query filters
  * `organization_id` from the trusted event row, never from user input.
@@ -15,6 +15,7 @@ import { embedText } from "@/lib/ai/embed";
 import { acquireDebounce } from "@/lib/ai/rag/debounce";
 import { chunkText, computeContentHash } from "@/lib/ai/rag/chunker";
 import { formatProductForRag, type NuvemshopProduct } from "@/lib/ai/rag/format-product";
+import { ingestPolicyFile } from "@/lib/ai/rag/ingest/policy";
 import {
   createKnowledgeVersion,
   markVersionReady,
@@ -252,6 +253,82 @@ async function handleProductSynced(
   return { type: "ok", versionId, chunkCount: successCount };
 }
 
+async function handleKnowledgeSourceUpdated(row: EventRow): Promise<ProcessResult> {
+  const sourceId = String(row.payload["knowledge_source_id"] ?? "");
+  if (!sourceId) return skip("missing_knowledge_source_id_in_payload");
+
+  const admin = createAdminClient();
+  const { data: source, error: sourceErr } = await admin
+    .from("ai_knowledge_sources")
+    .select("id, agent_id, source_type, source_metadata, status")
+    .eq("id", sourceId)
+    .eq("organization_id", row.organization_id)
+    .maybeSingle();
+
+  if (sourceErr) return { type: "error", detail: `knowledge_source_lookup_failed: ${sourceErr.message}` };
+  if (!source) return skip("knowledge_source_not_found_for_org");
+  if (source.source_type !== "policy") return skip(`unsupported_knowledge_source_type:${source.source_type}`);
+
+  const metadata = (source.source_metadata ?? {}) as Record<string, unknown>;
+  const blobPath = typeof metadata.blob_path === "string" ? metadata.blob_path : "";
+  const filename = typeof metadata.filename === "string" ? metadata.filename : "";
+  const ext = filename.toLowerCase().endsWith(".pdf") ? "pdf" : filename.toLowerCase().endsWith(".md") ? "md" : null;
+  if (!blobPath || !ext) return skip("policy_blob_metadata_missing_or_invalid");
+
+  const agentId = source.agent_id;
+  const debounceKey = `rag:debounce:${row.organization_id}:${agentId}:knowledge_source:${sourceId}`;
+  if (!(await acquireDebounce(debounceKey, DEBOUNCE_TTL_SEC))) {
+    return skip("debounced");
+  }
+
+  let versionId: string | undefined;
+  try {
+    const ingested = await ingestPolicyFile({
+      organizationId: row.organization_id,
+      agentId,
+      knowledgeSourceId: sourceId,
+      blobPath,
+      ext,
+    });
+    if (ingested.chunks.length === 0) return skip("no_chunks_generated");
+
+    const created = await createKnowledgeVersion({
+      agentId,
+      organizationId: row.organization_id,
+      sourceType: "policy",
+    });
+    versionId = created.versionId;
+
+    for (const [position, content] of ingested.chunks.entries()) {
+      const embedding = await embedText(content, { organizationId: row.organization_id });
+      const { error: upsertErr } = await admin
+        .from("ai_chunks")
+        .upsert(
+          {
+            organization_id: row.organization_id,
+            kb_version_id: versionId,
+            knowledge_source_id: sourceId,
+            position,
+            content,
+            content_hash: computeContentHash(content),
+            embedding: embedding.embedding as unknown as string,
+            metadata: { source_type: "policy", filename },
+          },
+          { onConflict: "organization_id,kb_version_id,content_hash", ignoreDuplicates: true },
+        );
+      if (upsertErr) throw new Error(`policy_chunk_upsert_failed at chunk ${position}: ${upsertErr.message}`);
+    }
+
+    await markVersionReady(versionId, row.organization_id, ingested.chunks.length);
+    await activateVersion({ agentId, versionId, organizationId: row.organization_id });
+    return { type: "ok", versionId, chunkCount: ingested.chunks.length };
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    if (versionId) await markVersionFailed(versionId, row.organization_id, detail).catch(() => undefined);
+    return { type: "error", detail: `policy_reindex_failed: ${detail}` };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Main processor — exported for handler adapter + unit tests
 // ---------------------------------------------------------------------------
@@ -270,6 +347,13 @@ export async function processRagIndexer(row: EventRow): Promise<HandlerResult> {
   // Guard: embedding provider must be configured.
   if (!isEmbeddingProviderConfigured()) {
     return { consumer_key: consumerKey, status: "skipped", detail: "openai_key_missing" };
+  }
+
+  if (row.event_type === "knowledge_source.updated") {
+    const result = await handleKnowledgeSourceUpdated(row);
+    if (result.type === "skip") return { consumer_key: consumerKey, status: "skipped", detail: result.reason };
+    if (result.type === "error") return { consumer_key: consumerKey, status: "error", detail: result.detail };
+    return { consumer_key: consumerKey, status: "ok", detail: `version=${result.versionId} chunks=${result.chunkCount}` };
   }
 
   // Resolve the active agent for this org.
@@ -302,13 +386,6 @@ export async function processRagIndexer(row: EventRow): Promise<HandlerResult> {
       case "nuvemshop.product_synced":
         result = await handleProductSynced(row, agentId);
         break;
-
-      case "knowledge_source.updated":
-        // Wave 4 stub — full reindex deferred to S-06.05/06/07
-        console.warn(
-          "[rag-indexer] knowledge_source.updated reindex deferred to S-06.05/06/07",
-        );
-        return { consumer_key: consumerKey, status: "skipped", detail: "knowledge_source_reindex_deferred" };
 
       default:
         return { consumer_key: consumerKey, status: "skipped", detail: `unhandled_event:${row.event_type}` };
