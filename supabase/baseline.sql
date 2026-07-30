@@ -8463,3 +8463,7 @@ begin
     execute format('revoke all on public.%I from anon', t);
   end loop;
 end $$;
+
+-- F4 Núcleo: chave de deduplicação usada pelo reindexador nativo de KB.
+create unique index if not exists uniq_ai_chunks_org_version_content_hash
+  on public.ai_chunks (organization_id, kb_version_id, content_hash);

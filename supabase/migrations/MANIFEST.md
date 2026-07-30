@@ -88,6 +88,7 @@ Migrations applied to Supabase project `rrydmwnporysaiysiztn` (sa-east-1, Postgr
 | `20260727000000` | `0086_knowledge_searches` | Telemetria de busca de conhecimento (hits, top_score, threshold) — leitor é o Painel de Evolução da Fase 4. Sem PII. |
 | `20260729000000` | `0092_stage_names_acentos` | Acentos nas etapas padrão do funil: o seed criava "Em separacao" e "Pos-venda" sem acento, e esses nomes aparecem no quadro principal. Corrige o seed e cura instalações existentes (só onde o nome padrão está intacto). |
 | `20260730033120` | `9000_nucleo_squads` | Núcleo F3: `nucleo_squads` e `nucleo_squad_agents`, portfólio de perfis/candidatos/tentativas com RLS por organização, e extensão aditiva dos três CHECKs core para `openrouter`. |
+| `20260730045355` | `9001_nucleo_ai_chunks_dedupe` | Núcleo F4: remove duplicatas exatas de chunks e torna o upsert de indexação determinístico por organização, versão e hash de conteúdo. |
 
 ## Reproducibility
 

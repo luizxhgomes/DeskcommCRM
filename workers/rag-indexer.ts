@@ -46,6 +46,12 @@ function skip(reason: string): SkipResult {
   return { type: "skip", reason };
 }
 
+function estimateTokenCount(content: string): number {
+  // A coluna é telemetria e não pode ser nula. A chamada de embedding devolve
+  // tokens de prompt, mas não por chunk em todas as versões do SDK.
+  return Math.max(1, Math.ceil(content.length / 4));
+}
+
 /**
  * Loads the default active agent for the org.
  * Returns null when no agent is configured.
@@ -311,6 +317,7 @@ async function handleKnowledgeSourceUpdated(row: EventRow): Promise<ProcessResul
             position,
             content,
             content_hash: computeContentHash(content),
+            token_count: estimateTokenCount(content),
             embedding: embedding.embedding as unknown as string,
             metadata: { source_type: "policy", filename },
           },

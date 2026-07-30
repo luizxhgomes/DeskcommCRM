@@ -2,8 +2,7 @@
  * Embedding wrapper for the RAG pipeline.
  *
  * Routes through Vercel AI Gateway when `AI_GATEWAY_API_KEY` is set; otherwise
- * uses the OpenAI provider directly (still no `@anthropic-ai/sdk`-style imports
- * — embeddings are an OpenAI capability and the gateway proxies them).
+ * uses the OpenAI provider directly or OpenRouter's compatible embeddings API.
  */
 
 import { createOpenAI } from "@ai-sdk/openai";
@@ -43,16 +42,18 @@ export async function embedText(
   // lê `AI_GATEWAY_API_KEY` do process.env. Headers vão junto p/ observabilidade
   // por tenant + ZDR.
   //
-  // SEM gateway: precisa ser o provider OpenAI EXPLÍCITO. Passar a string com
-  // barra aqui não cai no OpenAI direto — no AI SDK, id com barra é resolvido
-  // pelo gateway da Vercel mesmo sem chave, entrando no plano anônimo, cujo teto
-  // devolve `GatewayRateLimitError` e derruba a busca na base de conhecimento.
-  // Este arquivo prometia esse caminho no cabeçalho desde sempre e não o tinha.
+  // Sem gateway, constrói um provider explícito. O schema usa vetores 1536 e o
+  // slug canônico permanece `openai/text-embedding-3-small`; OpenRouter oferece
+  // esse endpoint em /embeddings sem alterar o contrato do RAG.
+  const embeddingId = String(model).replace(/^openai\//, "");
   const resolvido = cfg
     ? model
-    : createOpenAI({ apiKey: env.OPENAI_API_KEY }).textEmbeddingModel(
-        String(model).replace(/^openai\//, ""),
-      );
+    : env.OPENROUTER_API_KEY
+      ? createOpenAI({
+          apiKey: env.OPENROUTER_API_KEY,
+          baseURL: "https://openrouter.ai/api/v1",
+        }).textEmbeddingModel(embeddingId)
+      : createOpenAI({ apiKey: env.OPENAI_API_KEY }).textEmbeddingModel(embeddingId);
 
   const result = await embed({
     model: resolvido,

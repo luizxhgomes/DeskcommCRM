@@ -80,6 +80,9 @@ const schema = z.object({
   VERCEL_AI_GATEWAY_URL: z.string().optional().default(""),
   ANTHROPIC_API_KEY: z.string().optional().default(""),
   OPENAI_API_KEY: z.string().optional().default(""),
+  // OpenRouter também oferece o endpoint compatível de embeddings. Mantemos
+  // OpenAI direto como fallback para instalações que já o utilizam.
+  OPENROUTER_API_KEY: z.string().optional().default(""),
 
   // Fusão (Fase 4): DONO ÚNICO dos eventos ai_agent.dispatch_requested.
   // 'engine' (default) = o worker agent-engine é o único consumidor (o cron
@@ -178,10 +181,10 @@ if (!env.AI_GATEWAY_API_KEY && !env.ANTHROPIC_API_KEY) {
     "[env] No AI_GATEWAY_API_KEY or ANTHROPIC_API_KEY set — ai-response-worker will skip with reason='ai_gateway_key_missing'.",
   );
 }
-if (!env.OPENAI_API_KEY) {
+if (!env.OPENAI_API_KEY && !env.OPENROUTER_API_KEY) {
   console.warn(
-    "[env] No OPENAI_API_KEY set — RAG embedding unavailable (bot answers without retrieved context) " +
-      "AND voice-note transcription is off (the agent will ask leads to resend audio as text).",
+    "[env] No embedding provider key set — RAG embedding unavailable (bot answers without retrieved context). " +
+      "Voice-note transcription also remains off.",
   );
 }
 if (!env.IMPERSONATE_COOKIE_SECRET || env.IMPERSONATE_COOKIE_SECRET.length < 32) {
